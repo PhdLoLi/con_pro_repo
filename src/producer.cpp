@@ -58,7 +58,7 @@ main(int argc, char** argv)
   //listening
   dataProducer->setup();
 
-  std::string repoPrefix_str = "/example/repo/1";
+  std::string repoPrefix_str = "/ndn/edu/ucla/lijing/repo";
 
   Name repoPrefix(repoPrefix_str);
       
