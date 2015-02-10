@@ -39,14 +39,17 @@ namespace ndn {
     
     void
     processLeavingInterest(Interest& interest);
+
+    void
+    signLeavingInterest(Interest& interest);
     
     void
     onRetx(Interest& interest)
     {
       std::cout << "Retransmitted " << interest.getName() << std::endl;
     }
-
-
+    
+    std::string self_identity; 
   };
 
 } // namespace ndn

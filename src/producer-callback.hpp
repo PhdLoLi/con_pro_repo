@@ -30,10 +30,16 @@ namespace ndn {
     
     void
     processInterest(const Interest& interest);
+
+    void 
+    cacheMiss(const Interest& interest);
     
     void
     processOutgoingData(const Data& data);
     
+    void
+    cmdOutgoingData(const Data& data);
+
     void
     processIncomingInterest(const Interest& interest);
     

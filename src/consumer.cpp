@@ -23,10 +23,45 @@
 
 #include <ndn-cxx/contexts/consumer-context.hpp>
 #include "consumer-callback.hpp"
+#include <ndn-cxx/security/validator.hpp>
 
 // Enclosing code in ndn simplifies coding (can also use `using namespace ndn`)
 namespace ndn {
 // Additional nested namespace could be used to prevent/limit name contentions
+#define IDENTITY_NAME "/GOD/Confirm"  
+
+
+  class Verificator
+  {
+  public:
+    Verificator()
+    {
+      Name identity(IDENTITY_NAME);
+      Name keyName = m_keyChain.getDefaultKeyNameForIdentity(identity);
+      m_publicKey = m_keyChain.getPublicKey(keyName); 
+    };
+    
+    bool
+    onPacket(Data& data)
+    {
+    //  return true;
+      std::cout << "Get Data and Verify it!!" << std::endl;
+      if (Validator::verifySignature(data, *m_publicKey))
+      {
+        std::cout << "Data Verified!! Name:" << data.getName() <<  std::endl;
+        return true;
+      }
+      else
+      {
+        std::cout << "Data NOT Verified!!" << data.getName() << std::endl;
+        return false;
+      }
+    }
+    
+  private:
+    KeyChain m_keyChain;
+    shared_ptr<PublicKey> m_publicKey;
+  };
 
 int
 main(int argc, char** argv)
@@ -34,13 +69,15 @@ main(int argc, char** argv)
 //  Name sensorPrefix("/example/data/2/1421475525");
 
   std::string prefix = "/ndn/edu/ucla/lijing/cpu/temp";
+  std::string self_identity = "/my/iPhone"; 
 
   Name sensorPrefix(prefix);
       
   ConsumerCallback conCB;
 
-  Consumer* datagramConsumer = new Consumer(sensorPrefix, RELIABLE, DATAGRAM);
+  Consumer* datagramConsumer = new Consumer(sensorPrefix, SDR);
   datagramConsumer->setContextOption(MUST_BE_FRESH_S, true);
+  datagramConsumer->setContextOption(RIGHTMOST_CHILD_S, true);
     
   datagramConsumer->setContextOption(INTEREST_LEAVE_CNTX, 
                     (InterestCallback)bind(&ConsumerCallback::processLeavingInterest, &conCB, _1));
@@ -51,11 +88,51 @@ main(int argc, char** argv)
   datagramConsumer->setContextOption(CONTENT_RETRIEVED, 
                     (ContentCallback)bind(&ConsumerCallback::processPayload, &conCB, _1, _2));
   
-  if (argc > 1)
-    datagramConsumer->consume(Name(argv[1]));
-  else
+//  if (argc > 1)
+//    datagramConsumer->consume(Name(argv[1]));
+//  else
     datagramConsumer->consume(Name(""));
-//  datagramConsumer->consume(Name("zzz"));
+
+ 
+  std::string controlprefix = "/ndn/edu/ucla/lijing/light/iphone";
+
+  Name controlPrefix(controlprefix);
+  Verificator* verificator = new Verificator();
+  ConsumerCallback controlCB;
+
+  Consumer* controlConsumer = new Consumer(controlPrefix, SDR);
+
+  controlConsumer->setContextOption(MUST_BE_FRESH_S, true);
+    
+  controlConsumer->setContextOption(INTEREST_LEAVE_CNTX, 
+                    (InterestCallback)bind(&ConsumerCallback::signLeavingInterest, &controlCB, _1));
+  
+//  controlConsumer->setContextOption(DATA_ENTER_CNTX, 
+//                    (DataCallback)bind(&ConsumerCallback::processData, &controlCB, _1));
+  
+  controlConsumer->setContextOption(CONTENT_RETRIEVED, 
+                    (ContentCallback)bind(&ConsumerCallback::processPayload, &controlCB, _1, _2));
+
+  controlConsumer->setContextOption(DATA_TO_VERIFY,
+                    (DataVerificationCallback)bind(&Verificator::onPacket, verificator, _1));
+  
+  std::string command;
+  if(argc == 3)
+  {
+    self_identity = argv[2];
+    command = argv[1];
+  }
+  else if(argc == 2)
+  {
+    command = argv[1];
+  }
+  else{
+
+    command = "on";
+  }
+
+  controlCB.self_identity = self_identity;
+  controlConsumer->consume(Name(command));
 
   return 0;
 }

@@ -15,6 +15,36 @@
 namespace ndn {
 // Additional nested namespace could be used to prevent/limit name contentions
 
+//#define IDENTITY_NAME_IPHONE "/my/iPhone" 
+
+class Signer
+{
+public:
+  Signer()
+//  : m_identityName(IDENTITY_NAME_IPHONE)
+  {
+//    m_keyChain.createIdentity(m_identityName);
+  };
+  
+  void
+  setIdentity(std::string identity)
+  {
+    std::cout << "self_identity " << identity << std::endl;
+    m_identityName = Name(identity);
+    m_keyChain.createIdentity(m_identityName);
+
+  }
+  void
+  onPacket(Interest& interest)
+  {
+    m_keyChain.signByIdentity(interest, m_identityName);
+  }
+  
+private:
+  KeyChain m_keyChain;
+  Name m_identityName;
+};
+
   int times = 0;
 
   ConsumerCallback::ConsumerCallback()
@@ -30,12 +60,13 @@ namespace ndn {
     std::cout << buffer <<std::endl;
     std::cout << "Consumer DATA OVER!! " << std::endl;
     times ++;
+
   }
 
   void
   ConsumerCallback::processData(Data& data)
   {
-//    std::cout << "DATA IN CNTX Name: " << data.getName()  << std::endl;
+    std::cout << "DATA IN CNTX Name: " << data.getName()  << std::endl;
 //    times ++;
     //<< "FinalBlockId: " <<data.getFinalBlockId() << std::endl;
   }
@@ -65,6 +96,17 @@ namespace ndn {
   ConsumerCallback::processLeavingInterest(Interest& interest)
   {
 //    std::cout << "LEAVES " << interest.toUri() << std::endl;
-    std::cout << "Command Consumer --- Leaving name: " << interest.getName() << std::endl;
+    std::cout << "Command Consumer --- Leaving name: " << interest.toUri() << std::endl;
   }  
+
+  void
+  ConsumerCallback::signLeavingInterest(Interest& interest)
+  {
+    std::cout << "Before Signing Name " << interest.getName().toUri() << std::endl;
+    Signer signer;
+    signer.setIdentity(self_identity);
+    signer.onPacket(interest);
+    std::cout << "After Signing Name " << interest.getName().toUri() << std::endl;
+  } 
+
 } // namespace ndn

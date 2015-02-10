@@ -8,11 +8,45 @@
 #include "producer-callback.hpp"
 #include <boost/asio.hpp>
 #include "repo-command-parameter.hpp"
+#include <ndn-cxx/security/validator.hpp>
 
 // Enclosing code in ndn simplifies coding (can also use `using namespace ndn`)
 namespace ndn {
 // Additional nested namespace could be used to prevent/limit name contentiojs
   
+#define IDENTITY_NAME_IPHONE "/my/iPhone"
+  
+  class Verificator
+  {
+  public:
+    Verificator()
+    {
+      Name identity(IDENTITY_NAME_IPHONE);
+      Name keyName = m_keyChain.getDefaultKeyNameForIdentity(identity);
+      m_publicKey = m_keyChain.getPublicKey(keyName); 
+    };
+    
+    bool
+    onPacket(const Interest& interest)
+    {
+      if (Validator::verifySignature(interest, *m_publicKey))
+      {
+        std::cout << "Interest Verified! Name:" << interest.getName() <<  std::endl;
+        return true;
+      }
+      else
+      {
+        std::cout << "Interest NOT Verified! Name:" << interest.getName() << std::endl;
+        return false;
+      }
+    }
+    
+  private:
+    KeyChain m_keyChain;
+    shared_ptr<PublicKey> m_publicKey;
+  };
+
+
   std::string lastName = "";
 
   ProducerCallback::ProducerCallback()
@@ -36,6 +70,51 @@ namespace ndn {
   ProducerCallback::processConstData(const Data& data){}
   
   /* When the request can't be satisfied from the content store */
+  void 
+  ProducerCallback::cacheMiss(const Interest& interest)
+  {
+    std::cout << "Light Control Cache Miss " << interest.getName() << std::endl;
+//    std::string signature_str = interest.getName().get(-1).toUri();
+    Name prefix = interest.getName().getPrefix(5);
+    Name suffix = interest.getName().getSubName(5);
+    Verificator* verificator = new Verificator();
+    if( verificator->onPacket(interest) )
+    {
+      std::string cmd_str = interest.getName().get(6).toUri();
+//      std::cout << "prefix " << prefix.toUri() << std::endl; 
+      std::cout << "Consumer Command: " << cmd_str << std::endl; 
+      std::string content = cmd_str + " DONE!";
+      m_producer->produce(suffix, (uint8_t*)content.c_str(), content.size());
+      if(cmd_str == "on")
+      {
+        system("screenbrightness 0.9");
+      }
+      else if(cmd_str == "off")
+      {
+        system("screenbrightness 0.1");
+      }
+      else 
+        system(cmd_str.c_str());
+    }else
+    {
+      std::cout << "No produce!!!" << std::endl;
+      ApplicationNack appNack(interest, ApplicationNack::DATA_NOT_AVAILABLE);
+//      appNack.setDelay(5000); // in ms
+      m_producer->nack(appNack);
+
+    }
+//    std::string cmd_str = interest.getName().get(-2).toUri();
+//    std::string app_str = interest.getName().get(-3).toUri(); 
+//    // First Verify Signature
+//    // Then 
+//    if(app == "iphone")
+//    {
+//
+//    }
+//    else
+//    {
+//    }
+  }
   void
   ProducerCallback::processInterest(const Interest& interest)
   {
@@ -91,6 +170,12 @@ namespace ndn {
     std::cout << "Data Producer --- All IncomingInterest Name: " << interest.getName() << std::endl;
   }
   
+  void
+  ProducerCallback::cmdOutgoingData(const Data& data)
+  {
+    std::cout << "CMD Producer --- OutgoingData Name: " << data.getName() << std::endl;
+  }
+
   void
   ProducerCallback::processOutgoingData(const Data& data)
   {

@@ -18,7 +18,7 @@
  *
  * See AUTHORS.md for complete list of ndn-cxx authors and contributors.
  *
- * @author Ilya Moiseenko iliamo@ucla.edu
+ * @author Lijing Wang phdloli@ucla.edu 
  */
 
 #include <ndn-cxx/contexts/producer-context.hpp>
@@ -30,6 +30,28 @@
 // Enclosing code in ndn simplifies coding (can also use `using namespace ndn`)
 namespace ndn {
 // Additional nested namespace could be used to prevent/limit name contentions
+
+#define IDENTITY_NAME "/GOD/Confirm"  
+
+class Signer
+{
+public:
+  Signer()
+  : m_identityName(IDENTITY_NAME)
+  {
+    m_keyChain.createIdentity(m_identityName);
+  };
+  
+  void
+  onPacket(Data& data)
+  {
+    m_keyChain.signByIdentity(data, m_identityName);
+  }
+  
+private:
+  KeyChain m_keyChain;
+  Name m_identityName;
+};
 
 int
 main(int argc, char** argv)
@@ -49,14 +71,14 @@ main(int argc, char** argv)
   dataProducer->setContextOption(INTEREST_ENTER_CNTX,
                     (ConstInterestCallback)bind(&ProducerCallback::processIncomingInterest, &proCB, _1));
                       
-  dataProducer->setContextOption(INTEREST_TO_PROCESS,
+  dataProducer->setContextOption(CACHE_MISS,
                     (ConstInterestCallback)bind(&ProducerCallback::processInterest, &proCB, _1));
 
   dataProducer->setContextOption(DATA_LEAVE_CNTX,
                     (ConstDataCallback)bind(&ProducerCallback::processOutgoingData, &proCB, _1));
     
   //listening
-  dataProducer->setup();
+  dataProducer->attach();
 
   std::string repoPrefix_str = "/ndn/edu/ucla/lijing/repo";
 
@@ -64,7 +86,7 @@ main(int argc, char** argv)
       
   ConsumerCallback conCB;
 
-  proCB.commandConsumer = new Consumer(repoPrefix, RELIABLE, DATAGRAM);
+  proCB.commandConsumer = new Consumer(repoPrefix, SDR);
 
 
   proCB.commandConsumer->setContextOption(MUST_BE_FRESH_S, true);
@@ -75,6 +97,34 @@ main(int argc, char** argv)
   proCB.commandConsumer->setContextOption(DATA_ENTER_CNTX, 
                     (DataCallback)bind(&ConsumerCallback::checkStatus, &conCB, _1));
   
+  /* Producer of Control light command */
+  Name commandPrefix("/ndn/edu/ucla/lijing/light");
+   
+  ProducerCallback cmdCB;
+
+  Producer* cmdProducer = new Producer(commandPrefix);
+    
+  cmdCB.setProducer(cmdProducer); // needed for some callback functionality
+    
+  //setting callbacks
+  Signer signer;
+
+  cmdProducer->setContextOption(INTEREST_ENTER_CNTX,
+                    (ConstInterestCallback)bind(&ProducerCallback::processIncomingInterest, &cmdCB, _1));
+                      
+  cmdProducer->setContextOption(CACHE_MISS,
+                    (ConstInterestCallback)bind(&ProducerCallback::cacheMiss, &cmdCB, _1));
+
+  cmdProducer->setContextOption(DATA_LEAVE_CNTX,
+                    (ConstDataCallback)bind(&ProducerCallback::cmdOutgoingData, &cmdCB, _1));
+
+  cmdProducer->setContextOption(DATA_TO_SECURE,
+                    (DataCallback)bind(&Signer::onPacket, &signer, _1));
+
+    
+  //listening
+  cmdProducer->attach();
+
 
   while(1)
   {
@@ -101,7 +151,7 @@ main(int argc, char** argv)
     printf("%0.1f°C\n",temp);
     printf("------------------------------------------------------------------- END\n\n\n");
       
-    sleep(30); // because setup() is non-blocking
+    sleep(300); // because attach() is non-blocking
   }
   
   return 0;
